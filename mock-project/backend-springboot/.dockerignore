@@ -1,0 +1,11 @@
+build
+.gradle
+.git
+.gitattributes
+.gitignore
+*.log
+*.map
+__tests__
+*.md
+.vscode
+.idea
