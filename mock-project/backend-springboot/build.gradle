@@ -1,0 +1,65 @@
+buildscript {
+	ext {
+		springBootVersion = '2.7.18'
+	}
+	repositories {
+		mavenCentral()
+	}
+	dependencies {
+		classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+	}
+}
+
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'idea'
+apply plugin: 'org.springframework.boot'
+apply plugin: 'io.spring.dependency-management'
+
+dependencyManagement {
+    imports {
+        mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES
+    }
+    applyMavenExclusions = false
+}
+
+version = project.hasProperty('version') ? project.getProperty('version') : '0.0.1-SNAPSHOT'
+sourceCompatibility = JavaVersion.VERSION_17
+targetCompatibility = JavaVersion.VERSION_17
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation('org.springframework.boot:spring-boot-starter-data-jpa')
+	implementation('org.flywaydb:flyway-core')
+	implementation('org.flywaydb:flyway-mysql')
+	implementation('org.springframework.boot:spring-boot-starter-hateoas')
+	implementation('org.mybatis.spring.boot:mybatis-spring-boot-starter:2.3.1')
+	implementation('org.springframework.boot:spring-boot-starter-web')
+	implementation('org.springframework.boot:spring-boot-starter-validation')
+	implementation('io.jsonwebtoken:jjwt-api:0.11.2')
+	implementation('io.jsonwebtoken:jjwt-impl:0.11.2')
+	runtimeOnly('io.jsonwebtoken:jjwt-jackson:0.11.2')
+    implementation('org.springframework.boot:spring-boot-starter-security')
+	implementation('joda-time:joda-time:2.12.5')
+	implementation('mysql:mysql-connector-java:8.0.33')
+	compileOnly('org.projectlombok:lombok')
+	annotationProcessor('org.projectlombok:lombok')
+	testCompileOnly('org.projectlombok:lombok')
+	testAnnotationProcessor('org.projectlombok:lombok')
+	runtimeOnly('com.h2database:h2')  // Available for tests (H2 is used automatically in test profile)
+	testImplementation('com.h2database:h2')  // Explicit test dependency for H2
+	testImplementation 'io.rest-assured:rest-assured:4.5.1'
+	testImplementation 'io.rest-assured:spring-mock-mvc:4.5.1'
+	testImplementation 'org.springframework.security:spring-security-test'
+	// Spring Boot Test includes JUnit 5 by default, but we need JUnit 4 for these tests
+	testImplementation('org.springframework.boot:spring-boot-starter-test')
+	// Explicitly add JUnit 4 (tests use JUnit 4 annotations and SpringRunner)
+	testImplementation('junit:junit:4.13.2')
+	testImplementation('org.springframework.restdocs:spring-restdocs-mockmvc')
+    testImplementation('org.mybatis.spring.boot:mybatis-spring-boot-starter-test:2.3.1')
+}
+
+
