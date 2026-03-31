@@ -1,0 +1,149 @@
+pipeline {
+    agent any
+
+    tools {
+        nodejs "node18"
+    }
+
+    environment {
+        APP_DIR = 'mock-project/frontend-react'
+
+        // SonarQube
+        SONAR_HOME = tool 'SonarScanner'
+        SONAR_HOST_URL = 'http://10.0.1.206:9000'
+        SONAR_PROJECT_KEY = 'mock-ecommerce-frontend'
+        SONAR_PROJECT_NAME = 'Mock E-Commerce Frontend'
+
+        // Nexus
+        NEXUS_URL = 'http://10.0.1.161:8081'
+        NEXUS_REPOSITORY = 'raw-snapshots'
+        ARTIFACT_NAME = 'frontend-build-0.1.0-SNAPSHOT.zip'
+    }
+
+    stages {
+        stage('Verify Tools') {
+            steps {
+                echo '*** Verify Tools ***'
+                dir("${APP_DIR}") {
+                    sh 'node --version'
+                    sh 'npm --version'
+                }
+            }
+        }
+
+        stage('Cloning from GitHub') {
+            steps {
+                echo '*** Cloning from GitHub ***'
+                // git branch: 'main', url: 'https://github.com/eugenk-coherent/mock-project-ci.git'
+                 checkout scm
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                echo '*** Install Dependencies ***'
+                dir("${APP_DIR}") {
+                    sh 'npm ci'
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                echo '*** Run Tests ***'
+                dir("${APP_DIR}") {
+                    sh 'CI=true npm test -- --watch=false || true'
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                echo '*** SonarQube Analysis ***'
+                withSonarQubeEnv('SonarQube') {
+                    withCredentials([string(credentialsId: 'sonarqube-token-frontend', variable: 'SONAR_TOKEN')]) {
+                        sh '''
+                            "$SONAR_HOME/bin/sonar-scanner" \
+                              -Dsonar.token="$SONAR_TOKEN" \
+                              -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
+                              -Dsonar.projectName="$SONAR_PROJECT_NAME" \
+                              -Dsonar.sources=mock-project/frontend-react/src
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                echo '*** Quality Gate ***'
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo '*** Build ***'
+                dir("${APP_DIR}") {
+                    sh 'npm run build'
+                }
+            }
+        }
+
+        stage('Pack Artifacts') {
+            steps {
+                echo '*** Pack Artifacts ***'
+                dir("${APP_DIR}") {
+                    sh 'rm -f frontend-build.zip'
+                    sh 'zip -r frontend-build.zip build'
+                }
+                archiveArtifacts artifacts: 'mock-project/frontend-react/frontend-build.zip', fingerprint: true
+            }
+        }
+
+        stage('Push Artifacts to Nexus') {
+            steps {
+                echo '*** Push Artifacts to Nexus ***'
+                withCredentials([usernamePassword(
+                    credentialsId: 'nexus-credentials',
+                    usernameVariable: 'NEXUS_USER',
+                    passwordVariable: 'NEXUS_PASS'
+                )]) {
+                    sh '''
+                        FILE_PATH="$APP_DIR/frontend-build.zip"
+                        TARGET_URL="$NEXUS_URL/repository/$NEXUS_REPOSITORY/$ARTIFACT_NAME"
+
+                        if [ -f "$FILE_PATH" ]; then
+                            echo "Uploading $FILE_PATH to $TARGET_URL"
+
+                            curl -s -u "$NEXUS_USER:$NEXUS_PASS" \
+                              --upload-file "$FILE_PATH" \
+                              "$TARGET_URL"
+
+                            echo "Upload completed"
+                        else
+                            echo "File not found: $FILE_PATH"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo '*** Post Actions ***'
+            echo "Build finished with status: ${currentBuild.currentResult}"
+        }
+        success {
+            echo 'Frontend pipeline completed SUCCESSFULLY.'
+        }
+        failure {
+            echo 'Frontend pipeline FAILED.'
+        }
+    }
+}
+
