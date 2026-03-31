@@ -1,1 +1,1 @@
-mock project for HW 7-2 
+# mock project for HW 7-2 
