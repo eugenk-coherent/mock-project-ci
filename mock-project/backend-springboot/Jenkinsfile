@@ -1,0 +1,153 @@
+pipeline {
+    agent any
+
+    tools {
+        jdk 'jdk17'
+    }
+
+    environment {
+        APP_DIR = 'mock-project/backend-springboot'
+
+        // SonarQube
+        SONAR_HOME = tool 'SonarScanner'
+        SONAR_HOST_URL = 'http://10.0.1.206:9000'
+        SONAR_PROJECT_KEY = 'mock-ecommerce-backend'
+        SONAR_PROJECT_NAME = 'Mock E-Commerce Backend'
+
+        // Nexus
+        NEXUS_URL = 'http://10.0.1.161:8081'
+        NEXUS_REPOSITORY = 'maven-snapshots'
+        NEXUS_GROUP_ID = 'io.spring'
+        NEXUS_ARTIFACT_ID = 'backend-springboot'
+        NEXUS_VERSION = '0.0.1-SNAPSHOT'
+    }
+
+    stages {
+        stage('Verify Tools') {
+            steps {
+                echo '*** Verify Tools ***'
+                sh 'java -version'
+                sh 'echo JAVA_HOME=$JAVA_HOME'
+            }
+        }
+
+        stage('Cloning from GitHub') {
+            steps {
+                echo '*** Cloning from GitHub ***'
+                // git branch: 'main', url: 'https://github.com/eugenk-coherent/mock-project-ci.git'
+                checkout scm
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                echo '*** Install Dependencies ***'
+                dir("${APP_DIR}") {
+                    sh 'chmod +x gradlew'
+                    sh './gradlew dependencies --no-daemon'
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                echo '*** Run Tests ***'
+                dir("${APP_DIR}") {
+                    sh './gradlew test --no-daemon'
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                echo '*** SonarQube Analysis ***'
+                withSonarQubeEnv('SonarQube') {
+                    withCredentials([string(credentialsId: 'sonarqube-token-backend', variable: 'SONAR_TOKEN')]) {
+                        sh '''
+                            ${SONAR_HOME}/bin/sonar-scanner \
+                              -Dsonar.token=$SONAR_TOKEN \
+                              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                              -Dsonar.projectName="${SONAR_PROJECT_NAME}" \
+                              -Dsonar.tests=mock-project/backend-springboot/src/test/java \
+                              -Dsonar.sources=mock-project/backend-springboot/src/main/java \
+                              -Dsonar.java.binaries=mock-project/backend-springboot/build/classes/java/main
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                echo '*** Quality Gate ***'
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo '*** Build ***'
+                dir("${APP_DIR}") {
+                    sh './gradlew build --no-daemon'
+                }
+            }
+        }
+
+        stage('Pack Artifacts') {
+            steps {
+                echo '*** Pack Artifacts ***'
+                archiveArtifacts artifacts: 'mock-project/backend-springboot/build/libs/*.jar', fingerprint: true
+                junit 'mock-project/backend-springboot/build/test-results/test/*.xml'
+            }
+        }
+
+        stage('Push Artifacts to Nexus') {
+            steps {
+                echo '*** Push Artifacts to Nexus ***'
+                script {
+                    def artifactPath = "${APP_DIR}/build/libs/backend-springboot.jar"
+                    def artifactExists = fileExists(artifactPath)
+
+                    if (artifactExists) {
+                        nexusArtifactUploader(
+                            nexusVersion: 'nexus3',
+                            protocol: 'http',
+                            nexusUrl: '10.0.1.161:8081',
+                            groupId: NEXUS_GROUP_ID,
+                            version: NEXUS_VERSION,
+                            repository: NEXUS_REPOSITORY,
+                            credentialsId: 'nexus-credentials',
+                            artifacts: [[
+                                artifactId: NEXUS_ARTIFACT_ID,
+                                classifier: '',
+                                file: artifactPath,
+                                type: 'jar'
+                            ]]
+                        )
+                    } else {
+                        error "File ${artifactPath} could not be found"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo '*** Post Actions ***'
+            echo "Build finished with status: ${currentBuild.currentResult}"
+        }
+        success {
+            echo 'Pipeline completed SUCCESSFULLY.'
+        }
+        failure {
+            echo 'Pipeline FAILED. Check console output and SonarQube/Nexus steps.'
+        }
+        cleanup {
+            echo 'Cleanup'
+        }
+    }
+}
+
