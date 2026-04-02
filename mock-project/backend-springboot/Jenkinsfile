@@ -58,6 +58,15 @@ pipeline {
             }
         }
 
+        stage('Build') {
+            steps {
+                echo '*** Build ***'
+                dir("${APP_DIR}") {
+                    sh './gradlew build --no-daemon'
+                }
+            }
+        }
+
         stage('SonarQube Analysis') {
             steps {
                 echo '*** SonarQube Analysis ***'
@@ -82,15 +91,6 @@ pipeline {
                 echo '*** Quality Gate ***'
                 timeout(time: 5, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-
-        stage('Build') {
-            steps {
-                echo '*** Build ***'
-                dir("${APP_DIR}") {
-                    sh './gradlew build --no-daemon'
                 }
             }
         }
