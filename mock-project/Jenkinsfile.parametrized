@@ -157,40 +157,6 @@ pipeline {
                                 .collect { it.trim() }
                                 .findAll { it }
 
-                            def jarFile = sh(
-                                script: "ls ${BACKEND_ARTIFACT_DIR}/*.jar | grep -v plain | head -n 1",
-                                returnStdout: true
-                            ).trim()
-
-                            if (!jarFile) {
-                                error "No backend JAR found"
-                            }
-
-                            for (envName in envList) {
-                                def newName = "backend-env-${envName}.jar"
-                                def targetPath = "${BACKEND_ARTIFACT_DIR}/${newName}"
-
-                                sh """
-                                    cp ${jarFile} ${targetPath}
-                                """
-
-                                echo "Created artifact: ${targetPath}"
-                            }
-                        }
-
-                        archiveArtifacts artifacts: "${BACKEND_ARTIFACT_DIR}/backend-env-*.jar", fingerprint: true
-                    }
-                }
-
-                stage('Backend - Handle Artifacts') {
-                    steps {
-                        echo '*** Backend - Handle Artifacts ***'
-                        script {
-                            def envList = params.TARGET_ENVIRONMENTS
-                                .split(',')
-                                .collect { it.trim() }
-                                .findAll { it }
-
                             def jarFile = "${BACKEND_ARTIFACT_DIR}/backend-springboot.jar"
 
                             if (!fileExists(jarFile)) {
@@ -212,6 +178,44 @@ pipeline {
                         }
 
                         archiveArtifacts artifacts: "${BACKEND_ARTIFACT_DIR}/backend-env-*.jar", fingerprint: true
+                    }
+                }
+
+                stage('Backend - Push Artifacts to Nexus') {
+                    steps {
+                        echo '*** Backend - Push Artifacts to Nexus ***'
+                        script {
+                            def envList = params.TARGET_ENVIRONMENTS
+                                .split(',')
+                                .collect { it.trim() }
+                                .findAll { it }
+
+                            for (envName in envList) {
+                                def artifactPath = "${BACKEND_ARTIFACT_DIR}/backend-env-${envName}.jar"
+
+                                if (!fileExists(artifactPath)) {
+                                    error "File ${artifactPath} could not be found"
+                                }
+
+                                nexusArtifactUploader(
+                                    nexusVersion: 'nexus3',
+                                    protocol: 'http',
+                                    nexusUrl: "${NEXUS_URL.replace('http://', '')}",
+
+                                    groupId: "${NEXUS_GROUP_ID}",
+                                    version: "${NEXUS_VERSION}",
+                                    repository: "${NEXUS_BACKEND_REPOSITORY}",
+                                    credentialsId: 'nexus-credentials',
+
+                                    artifacts: [[
+                                        artifactId: "${NEXUS_ARTIFACT_ID}",
+                                        classifier: envName,
+                                        file: artifactPath,
+                                        type: 'jar'
+                                    ]]
+                                )
+                            }
+                        }
                     }
                 }
             }
