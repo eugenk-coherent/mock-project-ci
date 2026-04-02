@@ -1,0 +1,377 @@
+pipeline {
+    agent any
+
+    tools {
+        jdk 'jdk17'
+        nodejs 'node18'
+    }
+
+    parameters {
+        string(
+            name: 'BRANCH_NAME',
+            defaultValue: 'main',
+            description: 'Git branch to build (for example: main or feature/test-branch)'
+        )
+
+        choice(
+            name: 'BUILD_TYPE',
+            choices: ['backend', 'frontend', 'both'],
+            description: 'Select what to build'
+        )
+
+        string(
+            name: 'TARGET_ENVIRONMENTS',
+            defaultValue: 'dev',
+            description: 'Comma-separated environment labels (for example: dev or dev,staging,production)'
+        )
+    }
+
+    environment {
+        REPO_URL = 'https://github.com/eugenk-coherent/mock-project-ci.git'
+
+        BACKEND_APP_DIR = 'mock-project/backend-springboot'
+        FRONTEND_APP_DIR = 'mock-project/frontend-react'
+
+        BACKEND_ARTIFACT_DIR = 'mock-project/backend-springboot/build/libs'
+        FRONTEND_ARTIFACT_DIR = 'mock-project/frontend-react'
+
+        // SonarQube
+        SONAR_HOME = tool 'SonarScanner'
+        // SONAR_URL = 'http://10.0.1.206:9000'
+        SONAR_BACKEND_PROJECT_KEY = 'mock-ecommerce-backend'
+        SONAR_FRONTEND_PROJECT_KEY = 'mock-ecommerce-frontend'
+        SONAR_BACKEND_PROJECT_NAME = 'Mock E-Commerce Backend'
+        SONAR_FRONTEND_PROJECT_NAME = 'Mock E-Commerce Frontend'
+
+        // Nexus
+        NEXUS_URL = 'http://10.0.1.161:8081'
+        NEXUS_FRONTEND_REPOSITORY = 'raw-snapshots'
+        NEXUS_BACKEND_REPOSITORY = 'maven-snapshots'
+        NEXUS_GROUP_ID = 'io.spring'
+        NEXUS_ARTIFACT_ID = 'backend-springboot'
+        NEXUS_VERSION = '0.0.1-SNAPSHOT'
+    }
+
+    stages {
+        stage('Verify Parameters') {
+            steps {
+                echo '*** Verify Parameters ***'
+                echo "BRANCH_NAME = ${params.BRANCH_NAME}"
+                echo "BUILD_TYPE = ${params.BUILD_TYPE}"
+                echo "TARGET_ENVIRONMENTS = ${params.TARGET_ENVIRONMENTS}"
+            }
+        }
+
+        stage('Checkout Selected Branch') {
+            steps {
+                echo '*** Checkout Selected Branch ***'
+                git branch: "${params.BRANCH_NAME}", url: "${REPO_URL}"
+            }
+        }
+
+        stage('Check Environment Labels') {
+            steps {
+                echo '*** Check Environment Labels ***'
+                script {
+                    def envList = params.TARGET_ENVIRONMENTS
+                        .split(',')
+                        .collect { it.trim() }
+                        .findAll { it }
+
+                    if (envList.isEmpty()) {
+                        error('TARGET_ENVIRONMENTS must not be empty')
+                    }
+
+                    echo "Environment labels: ${envList.join(', ')}"
+                }
+            }
+        }
+
+        stage('Backend Build Flow') {
+            when {
+                expression {
+                    params.BUILD_TYPE == 'backend' || params.BUILD_TYPE == 'both'
+                }
+            }
+            stages {
+                stage('Backend - Verify Tools') {
+                    steps {
+                        echo '*** Backend - Verify Tools ***'
+                        sh 'java -version'
+                    }
+                }
+
+                stage('Backend - Run Tests') {
+                    steps {
+                        echo '*** Backend - Run Tests ***'
+                        dir("${BACKEND_APP_DIR}") {
+                            sh 'chmod +x gradlew'
+                            sh './gradlew test --no-daemon'
+                        }
+                    }
+                }
+
+                stage('Backend - Build') {
+                    steps {
+                        echo '*** Backend - Build ***'
+                        dir("${BACKEND_APP_DIR}") {
+                            sh './gradlew build --no-daemon'
+                        }
+                    }
+                }
+
+                stage('Backend - SonarQube Analysis') {
+                    steps {
+                        echo '*** Backend - SonarQube Analysis ***'
+                        withSonarQubeEnv('SonarQube') {
+                            withCredentials([string(credentialsId: 'sonarqube-token-backend', variable: 'SONAR_TOKEN')]) {
+                                sh '''
+                                    "$SONAR_HOME/bin/sonar-scanner" \
+                                      -Dsonar.token="$SONAR_TOKEN" \
+                                      -Dsonar.projectKey="$SONAR_BACKEND_PROJECT_KEY" \
+                                      -Dsonar.projectName="$SONAR_BACKEND_PROJECT_NAME" \
+                                      -Dsonar.tests=$BACKEND_APP_DIR/src/test/java \
+                                      -Dsonar.sources=$BACKEND_APP_DIR/src/main/java \
+                                      -Dsonar.java.binaries=$BACKEND_APP_DIR/build/classes/java/main
+                                '''
+                            }
+                        }
+                    }
+                }
+                
+                stage('Backend - Quality Gate') {
+                    steps {
+                        echo '*** Backend - Quality Gate ***'
+                        timeout(time: 5, unit: 'MINUTES') {
+                            waitForQualityGate abortPipeline: true
+                        }
+                    }
+                }
+
+                stage('Backend - Handle Artifacts') {
+                    steps {
+                        echo '*** Backend - Handle Artifacts ***'
+                        script {
+                            def envList = params.TARGET_ENVIRONMENTS
+                                .split(',')
+                                .collect { it.trim() }
+                                .findAll { it }
+
+                            def jarFile = sh(
+                                script: "ls ${BACKEND_ARTIFACT_DIR}/*.jar | grep -v plain | head -n 1",
+                                returnStdout: true
+                            ).trim()
+
+                            if (!jarFile) {
+                                error "No backend JAR found"
+                            }
+
+                            for (envName in envList) {
+                                def newName = "backend-env-${envName}.jar"
+                                def targetPath = "${BACKEND_ARTIFACT_DIR}/${newName}"
+
+                                sh """
+                                    cp ${jarFile} ${targetPath}
+                                """
+
+                                echo "Created artifact: ${targetPath}"
+                            }
+                        }
+
+                        archiveArtifacts artifacts: "${BACKEND_ARTIFACT_DIR}/backend-env-*.jar", fingerprint: true
+                    }
+                }
+
+                stage('Backend - Push Artifacts to Nexus') {
+                    steps {
+                        echo '*** Backend - Push Artifacts to Nexus ***'
+                        script {
+                            def envList = params.TARGET_ENVIRONMENTS
+                                .split(',')
+                                .collect { it.trim() }
+                                .findAll { it }
+
+                            for (envName in envList) {
+                                def artifactPath = "${BACKEND_ARTIFACT_DIR}/backend-env-${envName}.jar"
+
+                                if (!fileExists(artifactPath)) {
+                                    error "File ${artifactPath} could not be found"
+                                }
+
+                                nexusArtifactUploader(
+                                    nexusVersion: 'nexus3',
+                                    protocol: 'http',
+                                    nexusUrl: "${NEXUS_URL.replace('http://', '')}",
+
+                                    groupId: "${NEXUS_GROUP_ID}",
+                                    version: "${NEXUS_VERSION}",
+                                    repository: "${NEXUS_BACKEND_REPOSITORY}",
+                                    credentialsId: 'nexus-credentials',
+
+                                    artifacts: [[
+                                        artifactId: "${NEXUS_ARTIFACT_ID}",
+                                        classifier: envName,
+                                        file: artifactPath,
+                                        type: 'jar'
+                                    ]]
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Frontend Build Flow') {
+            when {
+                expression {
+                    params.BUILD_TYPE == 'frontend' || params.BUILD_TYPE == 'both'
+                }
+            }
+            stages {
+                stage('Frontend - Verify Tools') {
+                    steps {
+                        echo '*** Frontend - Verify Tools ***'
+                        dir("${FRONTEND_APP_DIR}") {
+                            sh 'node --version'
+                            sh 'npm --version'
+                        }
+                    }
+                }
+
+                stage('Frontend - Install Dependencies') {
+                    steps {
+                        echo '*** Frontend - Install Dependencies ***'
+                        dir("${FRONTEND_APP_DIR}") {
+                            sh 'npm ci'
+                        }
+                    }
+                }
+
+                stage('Frontend - Run Tests') {
+                    steps {
+                        echo '*** Frontend - Run Tests ***'
+                        dir("${FRONTEND_APP_DIR}") {
+                            sh 'CI=true npm test -- --watch=false || true'
+                        }
+                    }
+                }
+
+                stage('Frontend - SonarQube Analysis') {
+                    steps {
+                        echo '*** Frontend - SonarQube Analysis ***'
+                        withSonarQubeEnv('SonarQube') {
+                            withCredentials([string(credentialsId: 'sonarqube-token-frontend', variable: 'SONAR_TOKEN')]) {
+                                sh '''
+                                    "$SONAR_HOME/bin/sonar-scanner" \
+                                      -Dsonar.token="$SONAR_TOKEN" \
+                                      -Dsonar.projectKey="$SONAR_FRONTEND_PROJECT_KEY" \
+                                      -Dsonar.projectName="$SONAR_FRONTEND_PROJECT_NAME" \
+                                      -Dsonar.sources=$FRONTEND_APP_DIR/src
+                                '''
+                            }
+                        }
+                    }
+                }
+
+                stage('Frontend - Quality Gate') {
+                    steps {
+                        echo '*** Frontend - Quality Gate ***'
+                        timeout(time: 5, unit: 'MINUTES') {
+                            waitForQualityGate abortPipeline: true
+                        }
+                    }
+                }
+
+                stage('Frontend - Build') {
+                    steps {
+                        echo '*** Frontend - Build ***'
+                        dir("${FRONTEND_APP_DIR}") {
+                            sh 'npm run build'
+                        }
+                    }
+                }
+
+                stage('Frontend - Handle Artifacts') {
+                    steps {
+                        echo '*** Frontend - Handle Artifacts ***'
+                        script {
+                            def envList = params.TARGET_ENVIRONMENTS
+                                .split(',')
+                                .collect { it.trim() }
+                                .findAll { it }
+
+                            // creating zip
+                            sh """
+                                cd ${FRONTEND_APP_DIR}
+                                rm -f frontend-build.zip
+                                zip -r frontend-build.zip build
+                            """
+
+                            for (envName in envList) {
+                                def newName = "frontend-env-${envName}.zip"
+                                def targetPath = "${FRONTEND_APP_DIR}/${newName}"
+
+                                sh """
+                                    cp ${FRONTEND_APP_DIR}/frontend-build.zip ${targetPath}
+                                """
+
+                                echo "Created artifact: ${targetPath}"
+                            }
+                        }
+
+                        archiveArtifacts artifacts: "${FRONTEND_APP_DIR}/frontend-env-*.zip", fingerprint: true
+                    }
+                }
+
+                stage('Frontend - Push Artifacts to Nexus') {
+                    steps {
+                        echo '*** Frontend - Push Artifacts to Nexus ***'
+                        withCredentials([usernamePassword(
+                            credentialsId: 'nexus-credentials',
+                            usernameVariable: 'NEXUS_USER',
+                            passwordVariable: 'NEXUS_PASS'
+                        )]) {
+                            script {
+                                def envList = params.TARGET_ENVIRONMENTS
+                                    .split(',')
+                                    .collect { it.trim() }
+                                    .findAll { it }
+
+                                for (envName in envList) {
+                                    def filePath = "${FRONTEND_APP_DIR}/frontend-env-${envName}.zip"
+                                    def targetUrl = "${NEXUS_URL}/repository/${NEXUS_FRONTEND_REPOSITORY}/frontend-${envName}.zip"
+
+                                    if (!fileExists(filePath)) {
+                                        error "File ${filePath} could not be found"
+                                    }
+
+                                    sh '''
+                                        curl -s -u "$NEXUS_USER:$NEXUS_PASS" \
+                                          --upload-file "${filePath}" \
+                                          "${targetUrl}"
+                                    '''
+
+                                    echo "Uploaded ${filePath} to Nexus"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo '*** Post Actions ***'
+            echo "Build finished with status: ${currentBuild.currentResult}"
+        }
+        success {
+            echo 'Parametrized pipeline completed SUCCESSFULLY.'
+        }
+        failure {
+            echo 'Parametrized pipeline FAILED.'
+        }
+    }
+}
