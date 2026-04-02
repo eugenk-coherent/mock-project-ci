@@ -339,18 +339,23 @@ pipeline {
 
                                 for (envName in envList) {
                                     def filePath = "${FRONTEND_APP_DIR}/frontend-env-${envName}.zip"
-                                    def targetUrl = "${NEXUS_URL}/repository/${NEXUS_FRONTEND_REPOSITORY}/frontend-${envName}.zip"
+                                    def targetUrl = "${NEXUS_URL}/repository/${NEXUS_FRONTEND_REPOSITORY}/frontend-env-${envName}.zip"
 
                                     if (!fileExists(filePath)) {
                                         error "File ${filePath} could not be found"
                                     }
 
-                                    sh '''
-                                        curl -s -u "$NEXUS_USER:$NEXUS_PASS" \
-                                          --upload-file "${filePath}" \
-                                          "${targetUrl}"
-                                    '''
-
+                                    withEnv([
+                                        "FILE_PATH=${filePath}",
+                                        "TARGET_URL=${targetUrl}"
+                                    ]) {
+                                        sh '''
+                                            curl -s -u "$NEXUS_USER:$NEXUS_PASS" \
+                                              --upload-file "$FILE_PATH" \
+                                              "$TARGET_URL"
+                                        '''
+                                    }
+                
                                     echo "Uploaded ${filePath} to Nexus"
                                 }
                             }
