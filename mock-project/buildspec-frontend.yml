@@ -34,11 +34,11 @@ phases:
       - LATEST_TAG=latest
 
       # Output for log
-      - echo "Repository URI: $REPOSITORY_URI"
-      - echo "Commit hash: $COMMIT_HASH"
-      - echo "Branch name: $BRANCH_NAME"
-      - echo "Safe branch name: $SAFE_BRANCH_NAME"
-      - echo "Image tag: $IMAGE_TAG"
+      - 'echo "Repository URI: $REPOSITORY_URI"'
+      - 'echo "Commit hash: $COMMIT_HASH"'
+      - 'echo "Branch name: $BRANCH_NAME"'
+      - 'echo "Safe branch name: $SAFE_BRANCH_NAME"'
+      - 'echo "Image tag: $IMAGE_TAG"'
 
   build:
     commands:
