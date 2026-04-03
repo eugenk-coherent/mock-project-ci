@@ -1,0 +1,68 @@
+version: 0.2
+
+env:
+  variables:
+    REPOSITORY_URI: "805744615863.dkr.ecr.us-east-1.amazonaws.com/ek-mock-ecs-dev-frontend"
+
+phases:
+  install:
+    commands:
+      - echo "Install phase (optional)"
+
+  pre_build:
+    commands:
+      - echo "Pre-build phase started"
+
+      # Extract registry from repository URI
+      - ECR_REGISTRY=$(echo $REPOSITORY_URI | cut -d'/' -f1)
+
+      # Login to Amazon ECR
+      - echo "Logging in to Amazon ECR..."
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+      # Extract commit hash
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+
+      # Extract branch name
+      - BRANCH_NAME=$(echo ${CODEBUILD_WEBHOOK_HEAD_REF:-$CODEBUILD_SOURCE_VERSION} | sed 's#refs/heads/##')
+
+      # Sanitize branch name for Docker tag
+      - SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9._-]#-#g')
+
+      # Create tags
+      - IMAGE_TAG=${SAFE_BRANCH_NAME}-${COMMIT_HASH}
+      - LATEST_TAG=latest
+
+      # Output for log
+      - echo "Repository URI: $REPOSITORY_URI"
+      - echo "Commit hash: $COMMIT_HASH"
+      - echo "Branch name: $BRANCH_NAME"
+      - echo "Safe branch name: $SAFE_BRANCH_NAME"
+      - echo "Image tag: $IMAGE_TAG"
+
+  build:
+    commands:
+      - echo "Build phase started"
+
+      # Build Docker image from frontend directory
+      - docker build -t $REPOSITORY_URI:$IMAGE_TAG ./frontend-react
+
+      # Tag as latest
+      - docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:$LATEST_TAG
+
+  post_build:
+    commands:
+      - echo "Post-build phase started"
+
+      # Push images to ECR
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - docker push $REPOSITORY_URI:$LATEST_TAG
+
+      # Generate deployment metadata
+      - printf '{"repository_uri":"%s","image_tag":"%s","image_uri":"%s","commit_hash":"%s","branch_name":"%s"}' \
+          "$REPOSITORY_URI" "$IMAGE_TAG" "$REPOSITORY_URI:$IMAGE_TAG" "$COMMIT_HASH" "$SAFE_BRANCH_NAME" \
+          > frontend-image-detail.json
+
+artifacts:
+  files:
+    - frontend-image-detail.json
