@@ -30,11 +30,17 @@ phases:
       # Extract short commit hash
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
 
-      # Extract branch name
-      - BRANCH_NAME=$(echo ${CODEBUILD_WEBHOOK_HEAD_REF:-$CODEBUILD_SOURCE_VERSION} | sed 's#refs/heads/##')
+      # Extract branch name from webhook ref if available
+      - BRANCH_NAME=$(echo "${CODEBUILD_WEBHOOK_HEAD_REF:-}" | sed 's#refs/heads/##')
+
+      # Fallback branch name for manual builds or missing webhook context
+      - if [ -z "$BRANCH_NAME" ]; then BRANCH_NAME=manual; fi
 
       # Sanitize branch name
       - SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]' | sed 's#[^a-z0-9._-]#-#g')
+
+      # Final fallback after sanitizing
+      - if [ -z "$SAFE_BRANCH_NAME" ]; then SAFE_BRANCH_NAME=manual; fi
 
       # Create tags
       - IMAGE_TAG=${SAFE_BRANCH_NAME}-${COMMIT_HASH}
