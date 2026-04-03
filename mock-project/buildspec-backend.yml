@@ -21,7 +21,7 @@ phases:
 
       # Extract registry (remove repository name)
       - ECR_REGISTRY=$(echo $REPOSITORY_URI | cut -d'/' -f1)
-      - echo "ECR Registry: $ECR_REGISTRY"
+      - 'echo "ECR Registry: $ECR_REGISTRY"'
 
       # Login to Amazon ECR
       - echo "Logging in to Amazon ECR..."
@@ -41,12 +41,12 @@ phases:
       - LATEST_TAG=latest
 
       # Output for log
-      - echo "Repository URI: $REPOSITORY_URI"
-      - echo "Registry: $ECR_REGISTRY"
-      - echo "Commit hash: $COMMIT_HASH"
-      - echo "Branch name: $BRANCH_NAME"
-      - echo "Safe branch name: $SAFE_BRANCH_NAME"
-      - echo "Image tag: $IMAGE_TAG"
+      - 'echo "Repository URI: $REPOSITORY_URI"'
+      - 'echo "Registry: $ECR_REGISTRY"'
+      - 'echo "Commit hash: $COMMIT_HASH"'
+      - 'echo "Branch name: $BRANCH_NAME"'
+      - 'echo "Safe branch name: $SAFE_BRANCH_NAME"'
+      - 'echo "Image tag: $IMAGE_TAG"'
 
   # Main build
   build:
