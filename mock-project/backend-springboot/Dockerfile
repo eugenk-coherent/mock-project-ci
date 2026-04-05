@@ -1,7 +1,8 @@
 ########################
-# Stage 1 — Build
+# Stage 1 â€” Build
 ########################
-FROM eclipse-temurin:17-jdk-alpine AS builder
+FROM public.ecr.aws/docker/library/eclipse-temurin:17-jdk-alpine AS builder
+# FROM eclipse-temurin:17-jdk-alpine AS builder
 
 WORKDIR /app
 
@@ -21,9 +22,10 @@ COPY src src
 RUN ./gradlew build -x test --no-daemon
 
 ########################
-# Stage 2 — Runtime
+# Stage 2 â€” Runtime
 ########################
-FROM eclipse-temurin:17-jre-alpine
+FROM public.ecr.aws/docker/library/eclipse-temurin:17-jre-alpine
+# FROM eclipse-temurin:17-jre-alpine
 
 # Metadata labels
 LABEL org.opencontainers.image.title="RealWorld Backend"
