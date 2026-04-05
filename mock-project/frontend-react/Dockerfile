@@ -31,8 +31,12 @@ LABEL org.opencontainers.image.title="RealWorld Frontend"
 LABEL org.opencontainers.image.description="React frontend served by Nginx"
 
 # Remove default nginx config and static files (one layer)
-RUN rm /etc/nginx/conf.d/default.conf && \
+RUN apk update && apk upgrade && \
+    rm /etc/nginx/conf.d/default.conf && \
     rm -rf /usr/share/nginx/html/*
+
+# RUN rm /etc/nginx/conf.d/default.conf && \
+#     rm -rf /usr/share/nginx/html/*
 
 # Copy nginx template for runtime env substitution
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
