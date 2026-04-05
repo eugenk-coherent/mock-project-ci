@@ -23,18 +23,19 @@ RUN npm run build
 ########################
 # Stage 2 — Production (Nginx)
 ########################
-FROM public.ecr.aws/nginx/nginx:1.28.2-alpine
+FROM public.ecr.aws/nginx/nginx:1.28.3-alpine
 # FROM nginx:1.28.2-alpine
 
 # Metadata labels
 LABEL org.opencontainers.image.title="RealWorld Frontend"
 LABEL org.opencontainers.image.description="React frontend served by Nginx"
 
-# Remove default nginx config and static files (one layer)
+# Update Alpine packages in runtime image
 RUN apk update && apk upgrade && \
     rm /etc/nginx/conf.d/default.conf && \
     rm -rf /usr/share/nginx/html/*
 
+# Remove default nginx config and static files (one layer)
 # RUN rm /etc/nginx/conf.d/default.conf && \
 #     rm -rf /usr/share/nginx/html/*
 
