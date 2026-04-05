@@ -31,6 +31,9 @@ FROM public.ecr.aws/docker/library/eclipse-temurin:17-jre-alpine
 LABEL org.opencontainers.image.title="RealWorld Backend"
 LABEL org.opencontainers.image.description="Spring Boot backend for RealWorld Conduit"
 
+# Update Alpine packages in runtime image
+RUN apk update && apk upgrade
+
 # Create app directory
 WORKDIR /app
 
