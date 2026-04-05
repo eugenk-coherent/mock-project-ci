@@ -1,7 +1,8 @@
 ########################
-# Stage 1 — Build React
+# Stage 1 â€” Build React
 ########################
-FROM node:18-alpine AS builder
+FROM public.ecr.aws/docker/library/node:18-alpine AS builder
+# FROM node:18-alpine AS builder
 
 # Create app directory
 WORKDIR /app
@@ -20,9 +21,10 @@ RUN npm run build
 
 
 ########################
-# Stage 2 — Production (Nginx)
+# Stage 2 â€” Production (Nginx)
 ########################
-FROM nginx:1.28.2-alpine
+FROM public.ecr.aws/nginx/nginx:1.28.2-alpine
+# FROM nginx:1.28.2-alpine
 
 # Metadata labels
 LABEL org.opencontainers.image.title="RealWorld Frontend"
