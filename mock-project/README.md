@@ -16,7 +16,7 @@ In development, the frontend connects directly to the backend API:
 └─────────────────┘    └─────────────────┘    └─────────────────┘
      │                        │                        │
      └────────────────────────┴────────────────────────┘
-              Direct API calls from browser
+                  Direct API calls from browser
 ```
 
 **Configuration**: Frontend `agent.js` configured to call `http://localhost:8080/api`
