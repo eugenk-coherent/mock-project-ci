@@ -64,11 +64,9 @@ phases:
       - docker push $REPOSITORY_URI:$IMAGE_TAG
       - docker push $REPOSITORY_URI:$LATEST_TAG
 
-      # Generate deployment metadata
-      - printf '{"repository_uri":"%s","image_tag":"%s","image_uri":"%s","commit_hash":"%s","branch_name":"%s"}' \
-          "$REPOSITORY_URI" "$IMAGE_TAG" "$REPOSITORY_URI:$IMAGE_TAG" "$COMMIT_HASH" "$SAFE_BRANCH_NAME" \
-          > frontend-image-detail.json
+      # Generate ECS deployment artifact for CodePipeline
+      - printf '[{"name":"frontend","imageUri":"%s"}]' "$REPOSITORY_URI:$IMAGE_TAG" > imagedefinitions.json
 
 artifacts:
   files:
-    - frontend-image-detail.json
+    - imagedefinitions.json
