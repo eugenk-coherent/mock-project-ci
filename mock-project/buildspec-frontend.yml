@@ -65,6 +65,7 @@ phases:
       - docker push $REPOSITORY_URI:$LATEST_TAG
 
       # Generate ECS deployment artifact for CodePipeline
+      - echo "Generating imagedefinitions.json..."
       - printf '[{"name":"frontend","imageUri":"%s"}]' "$REPOSITORY_URI:$IMAGE_TAG" > imagedefinitions.json
 
 artifacts:
