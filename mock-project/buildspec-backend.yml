@@ -78,11 +78,11 @@ phases:
       # Generate deployment metadata (artifact)
       - echo "Generating deployment metadata..."
 
-      - printf '{"repository_uri":"%s","image_tag":"%s","image_uri":"%s","commit_hash":"%s","branch_name":"%s"}' \
-          "$REPOSITORY_URI" "$IMAGE_TAG" "$REPOSITORY_URI:$IMAGE_TAG" "$COMMIT_HASH" "$SAFE_BRANCH_NAME" \
-          > backend-image-detail.json
+      # Generate ECS deployment artifact for CodePipeline
+      - echo "Generating imagedefinitions.json..."
+      - printf '[{"name":"backend","imageUri":"%s"}]' "$REPOSITORY_URI:$IMAGE_TAG" > imagedefinitions.json
 
 # Artifacts (files that CodeBuild will save after execution)
 artifacts:
   files:
-    - backend-image-detail.json
+    - imagedefinitions.json
