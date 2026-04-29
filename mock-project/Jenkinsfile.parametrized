@@ -49,7 +49,6 @@ pipeline {
         NEXUS_BACKEND_REPOSITORY = 'maven-snapshots'
         NEXUS_GROUP_ID = 'io.spring'
         NEXUS_ARTIFACT_ID = 'backend-springboot'
-        NEXUS_VERSION = '0.0.1-SNAPSHOT'
     }
 
     stages {
@@ -66,6 +65,38 @@ pipeline {
             steps {
                 echo '*** Checkout Selected Branch ***'
                 git branch: "${params.BRANCH_NAME}", url: "${REPO_URL}"
+            }
+        }
+
+        stage('Prepare Git Prefix') {
+            steps {
+                echo '*** Prepare Git Prefix ***'
+                script {
+                    def rawBranchName = params.BRANCH_NAME?.trim()
+                    if (!rawBranchName) {
+                        rawBranchName = 'manual'
+                    }
+
+                    def safeBranchName = rawBranchName
+                        .toLowerCase()
+                        .replaceAll('[^a-z0-9._-]', '-')
+
+                    if (!safeBranchName) {
+                        safeBranchName = 'manual'
+                    }
+
+                    def gitCommitShort = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    env.GIT_VERSION_PREFIX = "${safeBranchName}-${gitCommitShort}"
+
+                    echo "Raw branch name   : ${rawBranchName}"
+                    echo "Safe branch name  : ${safeBranchName}"
+                    echo "Short commit hash : ${gitCommitShort}"
+                    echo "Git version prefix: ${env.GIT_VERSION_PREFIX}"
+                }
             }
         }
 
@@ -167,6 +198,8 @@ pipeline {
 
                             for (envName in envList) {
                                 def newName = "backend-env-${envName}.jar"
+                                // def newName = "backend-env-${envName}-${env.GIT_VERSION_PREFIX}.jar"                                
+
                                 def targetPath = "${BACKEND_ARTIFACT_DIR}/${newName}"
 
                                 sh """
@@ -192,6 +225,7 @@ pipeline {
 
                             for (envName in envList) {
                                 def artifactPath = "${BACKEND_ARTIFACT_DIR}/backend-env-${envName}.jar"
+                                // def artifactPath = "${BACKEND_ARTIFACT_DIR}/backend-env-${envName}-${env.GIT_VERSION_PREFIX}.jar"
 
                                 if (!fileExists(artifactPath)) {
                                     error "File ${artifactPath} could not be found"
@@ -203,7 +237,7 @@ pipeline {
                                     nexusUrl: "${NEXUS_URL.replace('http://', '')}",
 
                                     groupId: "${NEXUS_GROUP_ID}",
-                                    version: "${NEXUS_VERSION}",
+                                    version: "${env.GIT_VERSION_PREFIX}-SNAPSHOT",
                                     repository: "${NEXUS_BACKEND_REPOSITORY}",
                                     credentialsId: 'nexus-credentials',
 
@@ -308,7 +342,7 @@ pipeline {
                             """
 
                             for (envName in envList) {
-                                def newName = "frontend-env-${envName}.zip"
+                                def newName = "frontend-env-${envName}-${env.GIT_VERSION_PREFIX}.zip"
                                 def targetPath = "${FRONTEND_APP_DIR}/${newName}"
 
                                 sh """
@@ -338,8 +372,8 @@ pipeline {
                                     .findAll { it }
 
                                 for (envName in envList) {
-                                    def filePath = "${FRONTEND_APP_DIR}/frontend-env-${envName}.zip"
-                                    def targetUrl = "${NEXUS_URL}/repository/${NEXUS_FRONTEND_REPOSITORY}/frontend-env-${envName}.zip"
+                                    def filePath = "${FRONTEND_APP_DIR}/frontend-env-${envName}-${env.GIT_VERSION_PREFIX}.zip"
+                                    def targetUrl = "${NEXUS_URL}/repository/${NEXUS_FRONTEND_REPOSITORY}/frontend-env-${envName}-${env.GIT_VERSION_PREFIX}.zip"
 
                                     if (!fileExists(filePath)) {
                                         error "File ${filePath} could not be found"
