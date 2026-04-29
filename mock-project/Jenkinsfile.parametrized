@@ -335,7 +335,8 @@ pipeline {
                             // creating zip
                             sh """
                                 cd ${FRONTEND_APP_DIR}
-                                rm -f frontend-build.zip
+                                rm -f frontend-build-*.zip
+                                rm -f frontend-env-*.zip
                                 zip -r frontend-build.zip build
                             """
 
