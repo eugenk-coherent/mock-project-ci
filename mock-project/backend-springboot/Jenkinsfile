@@ -151,7 +151,7 @@ pipeline {
                             protocol: 'http',
                             nexusUrl: '10.0.1.161:8081',
                             groupId: NEXUS_GROUP_ID,
-                            version: env.GIT_VERSION_PREFIX,
+                            version: "${env.GIT_VERSION_PREFIX}-SNAPSHOT",
                             repository: NEXUS_REPOSITORY,
                             credentialsId: 'nexus-credentials',
                             artifacts: [[
