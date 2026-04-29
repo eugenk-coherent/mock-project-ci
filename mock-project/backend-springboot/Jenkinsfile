@@ -39,6 +39,42 @@ pipeline {
             }
         }
 
+        stage('Prepare Git Prefix') {
+            steps {
+                echo '*** Prepare Git Prefix ***'
+                script {
+                    def rawBranchName = env.BRANCH_NAME ?: sh(
+                        script: 'git rev-parse --abbrev-ref HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    if (!rawBranchName) {
+                        rawBranchName = 'manual'
+                    }
+
+                    def safeBranchName = rawBranchName
+                        .toLowerCase()
+                        .replaceAll('[^a-z0-9._-]', '-')
+
+                    if (!safeBranchName) {
+                        safeBranchName = 'manual'
+                    }
+
+                    def gitCommitShort = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    env.GIT_VERSION_PREFIX = "${safeBranchName}-${gitCommitShort}"
+
+                    echo "Raw branch name   : ${rawBranchName}"
+                    echo "Safe branch name  : ${safeBranchName}"
+                    echo "Short commit hash : ${gitCommitShort}"
+                    echo "Git version prefix: ${env.GIT_VERSION_PREFIX}"
+                }
+            }
+        }
+
         stage('Install Dependencies') {
             steps {
                 echo '*** Install Dependencies ***'
@@ -138,6 +174,7 @@ pipeline {
         always {
             echo '*** Post Actions ***'
             echo "Build finished with status: ${currentBuild.currentResult}"
+            echo "Git version prefix: ${env.GIT_VERSION_PREFIX}"
         }
         success {
             echo 'Pipeline completed SUCCESSFULLY.'
