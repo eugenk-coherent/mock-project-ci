@@ -17,7 +17,6 @@ pipeline {
         // Nexus
         NEXUS_URL = 'http://10.0.1.161:8081'
         NEXUS_REPOSITORY = 'raw-snapshots'
-        ARTIFACT_NAME = 'frontend-build-0.1.0-SNAPSHOT.zip'
     }
 
     stages {
@@ -36,6 +35,44 @@ pipeline {
                 echo '*** Cloning from GitHub ***'
                 // git branch: 'main', url: 'https://github.com/eugenk-coherent/mock-project-ci.git'
                  checkout scm
+            }
+        }
+
+        stage('Prepare Git Prefix') {
+            steps {
+                echo '*** Prepare Git Prefix ***'
+                script {
+                    def rawBranchName = env.BRANCH_NAME ?: sh(
+                        script: 'git rev-parse --abbrev-ref HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    if (!rawBranchName) {
+                        rawBranchName = 'manual'
+                    }
+
+                    def safeBranchName = rawBranchName
+                        .toLowerCase()
+                        .replaceAll('[^a-z0-9._-]', '-')
+
+                    if (!safeBranchName) {
+                        safeBranchName = 'manual'
+                    }
+
+                    def gitCommitShort = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    env.GIT_VERSION_PREFIX = "${safeBranchName}-${gitCommitShort}"
+                    env.FRONTEND_ARTIFACT_NAME = "frontend-build-${env.GIT_VERSION_PREFIX}.zip"
+
+                    echo "Raw branch name        : ${rawBranchName}"
+                    echo "Safe branch name       : ${safeBranchName}"
+                    echo "Short commit hash      : ${gitCommitShort}"
+                    echo "Git version prefix     : ${env.GIT_VERSION_PREFIX}"
+                    echo "Frontend artifact name : ${env.FRONTEND_ARTIFACT_NAME}"
+                }
             }
         }
 
@@ -96,10 +133,10 @@ pipeline {
             steps {
                 echo '*** Pack Artifacts ***'
                 dir("${APP_DIR}") {
-                    sh 'rm -f frontend-build.zip'
-                    sh 'zip -r frontend-build.zip build'
+                    sh "rm -f ${env.FRONTEND_ARTIFACT_NAME}"
+                    sh "zip -r ${env.FRONTEND_ARTIFACT_NAME} build"
                 }
-                archiveArtifacts artifacts: 'mock-project/frontend-react/frontend-build.zip', fingerprint: true
+                archiveArtifacts artifacts: "mock-project/frontend-react/${env.FRONTEND_ARTIFACT_NAME}", fingerprint: true
             }
         }
 
@@ -112,8 +149,8 @@ pipeline {
                     passwordVariable: 'NEXUS_PASS'
                 )]) {
                     sh '''
-                        FILE_PATH="$APP_DIR/frontend-build.zip"
-                        TARGET_URL="$NEXUS_URL/repository/$NEXUS_REPOSITORY/$ARTIFACT_NAME"
+                        FILE_PATH="$APP_DIR/$FRONTEND_ARTIFACT_NAME"
+                        TARGET_URL="$NEXUS_URL/repository/$NEXUS_REPOSITORY/$FRONTEND_ARTIFACT_NAME"
 
                         if [ -f "$FILE_PATH" ]; then
                             echo "Uploading $FILE_PATH to $TARGET_URL"
