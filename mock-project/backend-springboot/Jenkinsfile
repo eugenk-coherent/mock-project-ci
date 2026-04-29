@@ -19,7 +19,6 @@ pipeline {
         NEXUS_REPOSITORY = 'maven-snapshots'
         NEXUS_GROUP_ID = 'io.spring'
         NEXUS_ARTIFACT_ID = 'backend-springboot'
-        NEXUS_VERSION = '0.0.1-SNAPSHOT'
     }
 
     stages {
@@ -152,7 +151,7 @@ pipeline {
                             protocol: 'http',
                             nexusUrl: '10.0.1.161:8081',
                             groupId: NEXUS_GROUP_ID,
-                            version: NEXUS_VERSION,
+                            version: env.GIT_VERSION_PREFIX,
                             repository: NEXUS_REPOSITORY,
                             credentialsId: 'nexus-credentials',
                             artifacts: [[
