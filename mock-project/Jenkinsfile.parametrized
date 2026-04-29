@@ -197,8 +197,7 @@ pipeline {
                             sh "rm -f ${BACKEND_ARTIFACT_DIR}/backend-env-*.jar"
 
                             for (envName in envList) {
-                                def newName = "backend-env-${envName}.jar"
-                                // def newName = "backend-env-${envName}-${env.GIT_VERSION_PREFIX}.jar"                                
+                                def newName = "backend-env-${envName}-${env.GIT_VERSION_PREFIX}.jar"                                
 
                                 def targetPath = "${BACKEND_ARTIFACT_DIR}/${newName}"
 
@@ -224,8 +223,7 @@ pipeline {
                                 .findAll { it }
 
                             for (envName in envList) {
-                                def artifactPath = "${BACKEND_ARTIFACT_DIR}/backend-env-${envName}.jar"
-                                // def artifactPath = "${BACKEND_ARTIFACT_DIR}/backend-env-${envName}-${env.GIT_VERSION_PREFIX}.jar"
+                                def artifactPath = "${BACKEND_ARTIFACT_DIR}/backend-env-${envName}-${env.GIT_VERSION_PREFIX}.jar"
 
                                 if (!fileExists(artifactPath)) {
                                     error "File ${artifactPath} could not be found"
